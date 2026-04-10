@@ -1,0 +1,14 @@
+[project]
+name = "langchain-mcp-deepeval-trajectory-eval"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp>=3.2.3",
+    "langchain>=1.2.15",
+    "langchain-mcp-adapters>=0.2.2",
+    "langchain-openai>=1.1.12",
+    "langgraph-cli[inmem]>=0.4.21",
+    "python-dotenv>=1.2.2",
+]

@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "my_mcp_agent": "agent_call/agent.py:build_graph"
+  },
+  "env": ".env"
+}
