@@ -69,6 +69,9 @@ uv run python -m agent_call.agent
     ├── custom_mcp_server.py        # 自定义 MCP 服务器实现
     └── middleware.py               # Human-in-the-loop 中间件配置
 ```
+## 启动客户端
+### uv run client_apis/agent_client.py
+### [客户端接口说明文件](readme_hitl.md) - http接口和python改造、sse 帧格式、前端接入指南
 
 ## 各文件作用详解
 
