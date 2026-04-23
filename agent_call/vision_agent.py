@@ -11,13 +11,14 @@
 
 import os
 from typing import Annotated
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from langchain_core.messages import HumanMessage
-from langchain.tools import tool
 from langchain.agents import create_agent
+from langchain.tools import tool
+from langchain_core.messages import HumanMessage
 
 
 def _build_vision_subagent():
@@ -33,22 +34,26 @@ def _build_vision_subagent():
 
     if model_provider == "google_genai":
         from langchain_google_genai import ChatGoogleGenerativeAI
+
         model = ChatGoogleGenerativeAI(
             model=model_name,
             api_key=os.getenv("GOOGLE_API_KEY"),
         )
     elif model_provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
+
         model = ChatAnthropic(
             model_name=model_name,
             api_key=os.getenv("ANTHROPIC_API_KEY"),
         )
     elif model_provider == "openai":
         from langchain_openai import ChatOpenAI
+
         model = ChatOpenAI(
             model=model_name,
             api_key=os.getenv("OPENAI_API_KEY") or os.getenv("MOONSHOT_API_KEY"),
-            base_url=os.getenv("OPENAI_BASE_URL") or os.getenv("MOONSHOT_BASE_URL", "https://api.openai.com/v1"),
+            base_url=os.getenv("OPENAI_BASE_URL")
+            or os.getenv("MOONSHOT_BASE_URL", "https://api.openai.com/v1"),
         )
     else:
         raise ValueError(f"Unsupported VISION_MODEL_PROVIDER: {model_provider}")
@@ -73,8 +78,9 @@ def _build_vision_subagent():
 subagent = _build_vision_subagent()
 
 
-
-@tool("vision", description="""分析图片内容，提取图片中的文字、物体、场景等信息。
+@tool(
+    "vision",
+    description="""分析图片内容，提取图片中的文字、物体、场景等信息。
 
 输入参数：
 - image_url: 图片的网络 URL 地址，例如 https://example.com/image.jpg
@@ -82,7 +88,8 @@ subagent = _build_vision_subagent()
 - query: 用户想要了解的问题，例如 "这张图里有什么？" 或 "读取图片中的文字"
 
 返回：图片的详细描述和分析结果。
-""")
+""",
+)
 def analyze_image(
     image_url: Annotated[str | None, "图片的网络 URL"] = None,
     image_base64: Annotated[str | None, "图片的 base64 编码"] = None,
@@ -114,22 +121,18 @@ def analyze_image(
     else:
         return "错误：未提供图片 URL 或 base64 数据"
 
-    result = subagent.invoke(
-        {"messages": [HumanMessage(content=content)]}
-    )
+    result = subagent.invoke({"messages": [HumanMessage(content=content)]})
 
     # 提取子 agent 的最终回复
     final_message = result["messages"][-1]
     return final_message.content
 
 
-
-
 if __name__ == "__main__":
-
-    result = analyze_image.invoke({
-        "image_url": "http://88bill99.top:23050/api/device/upload/file/1234",
-        "query": "请详细描述这张图片的内容，包括场景、物体、文字等所有细节",
-    })
+    result = analyze_image.invoke(
+        {
+            "image_url": "http://88bill99.top:23050/api/device/upload/file/1234",
+            "query": "请详细描述这张图片的内容，包括场景、物体、文字等所有细节",
+        }
+    )
     print(result)
-    

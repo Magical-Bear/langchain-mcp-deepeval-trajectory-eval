@@ -117,7 +117,7 @@ Agent connects to MCP servers via streamable HTTP:
 | `langgraph.json` | LangGraph CLI config — maps `my_mcp_agent` → `agent_call/agent.py:build_graph` |
 | `agent_call/agent.py` | Core agent: loads env, fetches MCP tools, creates `ChatOpenAI` (Kimi), wraps with HITL middleware and `InMemorySaver`, exposes `build_graph()`. Registers `analyze_image` as a tool. |
 | `agent_call/vision_agent.py` | Vision sub-agent wrapped as a `@tool`. Uses a vision-capable model (GPT-4o/Claude/Gemini) to analyze images from URL or base64. Loaded lazily and cached at module level. |
-| `agent_call/memory_router.py` | `MemoryRouter` — queries `/threads/search` to get historical messages, uses `kimi-k2-turbo-preview` to classify relevance (y/n), uses `kimi-k2-0905-preview` to compress long history, and formats injected `HumanMessage` for context injection. |
+| `client_apis/memory_router.py` | `MemoryRouter` — client-side, same functionality as before |
 | `agent_call/mcp_config.py` | Creates a `MultiServerMCPClient` connecting to Phone-use and Amap MCP servers |
 | `agent_call/middleware.py` | Configures `HumanInTheLoopMiddleware` — defines which tools require approval and what decisions are allowed |
 | `agent_call/custom_mcp_server.py` | FastMCP server providing mock phone/GPS tools; runs standalone on port 8000 |

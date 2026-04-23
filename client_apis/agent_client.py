@@ -1,15 +1,16 @@
-import os
-import json
-import uuid
-import sys
 import asyncio
+import contextlib
+import json
+import os
+import sys
+import uuid
+
 import aiohttp
-from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from agent_call.memory_router import get_memory_router, ThreadContext
+from client_apis.memory_router import ThreadContext, get_memory_router
 
 BASE_URL = os.getenv("LANGGRAPH_BASE_URL", "http://127.0.0.1:2024")
 ASSISTANT_ID = os.getenv("LANGGRAPH_ASSISTANT_ID")
@@ -29,14 +30,15 @@ class LangGraphClient:
 
     async def create_thread(self) -> str:
         """创建一个新的 Thread"""
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.base_url}/threads",
-                json={"metadata": {"graph_id": "my_mcp_agent"}}
-            ) as resp:
-                resp.raise_for_status()
-                data = await resp.json()
-                return data["thread_id"]
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(
+                f"{self.base_url}/threads", json={"metadata": {"graph_id": "my_mcp_agent"}}
+            ) as resp,
+        ):
+            resp.raise_for_status()
+            data = await resp.json()
+            return data["thread_id"]
 
     async def search_threads(self, limit: int = 10) -> list:
         """获取历史 Thread 列表"""
@@ -46,29 +48,27 @@ class LangGraphClient:
             "offset": 0,
             "status": "idle",
             "sort_by": "updated_at",
-            "sort_order": "desc"
+            "sort_order": "desc",
         }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.base_url}/threads/search",
-                json=payload
-            ) as resp:
-                resp.raise_for_status()
-                return await resp.json()
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(f"{self.base_url}/threads/search", json=payload) as resp,
+        ):
+            resp.raise_for_status()
+            return await resp.json()
 
     async def get_latest_checkpoint(self, thread_id: str) -> str:
         """获取某个 Thread 最新的 checkpoint_id"""
         payload = {"limit": 1}
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.base_url}/threads/{thread_id}/history",
-                json=payload
-            ) as resp:
-                resp.raise_for_status()
-                history = await resp.json()
-                if history:
-                    return history[0].get("checkpoint_id")
-                return None
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(f"{self.base_url}/threads/{thread_id}/history", json=payload) as resp,
+        ):
+            resp.raise_for_status()
+            history = await resp.json()
+            if history:
+                return history[0].get("checkpoint_id")
+            return None
 
     # ==========================================
     # 流式渲染
@@ -90,13 +90,15 @@ class LangGraphClient:
             if isinstance(result, str):
                 parsed = json.loads(result)
                 display_result = parsed
-            elif (isinstance(result, list) and len(result) > 0
-                  and isinstance(result[0], dict) and 'text' in result[0]):
-                display_result = result[0]['text']
-                try:
+            elif (
+                isinstance(result, list)
+                and len(result) > 0
+                and isinstance(result[0], dict)
+                and "text" in result[0]
+            ):
+                display_result = result[0]["text"]
+                with contextlib.suppress(Exception):
                     display_result = json.loads(display_result)
-                except Exception:
-                    pass
             if isinstance(display_result, (dict, list)):
                 display_result = json.dumps(display_result, ensure_ascii=False)
             else:
@@ -113,13 +115,13 @@ class LangGraphClient:
             args_str = args_str[:27] + "..."
 
         table = (
-            f"\n\n{'='*60}\n"
+            f"\n\n{'=' * 60}\n"
             f"工具执行完成: {tool_name}\n"
-            f"{'-'*60}\n"
+            f"{'-' * 60}\n"
             f"{'输入参数 (Args)':<32} | {'执行结果 (Result)'}\n"
-            f"{'-'*60}\n"
+            f"{'-' * 60}\n"
             f"{args_str:<32} | {display_result}\n"
-            f"{'='*60}\n\n"
+            f"{'=' * 60}\n\n"
         )
 
         async with self.console_lock:
@@ -135,10 +137,10 @@ class LangGraphClient:
     async def stream_run(
         self,
         thread_id: str,
-        input_msg: str = None,
-        command: dict = None,
-        checkpoint_id: str = None,
-        injected_messages: list = None,
+        input_msg: str | None = None,
+        command: dict | None = None,
+        checkpoint_id: str | None = None,
+        injected_messages: list | None = None,
     ):
         """
         发起一次 runs/stream 请求。
@@ -157,11 +159,13 @@ class LangGraphClient:
         if injected_messages:
             messages.extend(injected_messages)
         if input_msg:
-            messages.append({
-                "id": str(uuid.uuid4()),
-                "type": "human",
-                "content": [{"type": "text", "text": input_msg}]
-            })
+            messages.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "type": "human",
+                    "content": [{"type": "text", "text": input_msg}],
+                }
+            )
 
         payload = {
             "stream_mode": ["messages-tuple", "values", "custom"],
@@ -185,63 +189,73 @@ class LangGraphClient:
             payload["checkpoint"] = {"checkpoint_id": checkpoint_id, "checkpoint_ns": ""}
 
         pending_tool_calls = {}
+        pending_tasks: list[asyncio.Task] = []
         interrupt_data = None
         self._is_new_line = True
         self._last_ai_response = ""
 
         sys.stdout.write("\n")
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload) as resp:
-                if resp.status != 200:
-                    error_detail = await resp.text()
-                    print(f"\n请求失败，状态码: {resp.status}")
-                    print(f"后端报错详情: {error_detail}")
-                    return
+        async with aiohttp.ClientSession() as session, session.post(url, json=payload) as resp:
+            if resp.status != 200:
+                error_detail = await resp.text()
+                print(f"\n请求失败, 状态码: {resp.status}")
+                print(f"后端报错详情: {error_detail}")
+                return
 
-                current_event = None
-                async for line_bytes in resp.content:
-                    line = line_bytes.decode('utf-8').strip()
-                    if not line:
+            current_event = None
+            async for line_bytes in resp.content:
+                line = line_bytes.decode("utf-8").strip()
+                if not line:
+                    continue
+
+                if line.startswith("event:"):
+                    current_event = line.split(":", 1)[1].strip()
+                elif line.startswith("data:") and current_event:
+                    data_str = line.split(":", 1)[1].strip()
+                    try:
+                        data = json.loads(data_str)
+                    except json.JSONDecodeError:
                         continue
 
-                    if line.startswith("event:"):
-                        current_event = line.split(":", 1)[1].strip()
-                    elif line.startswith("data:") and current_event:
-                        data_str = line.split(":", 1)[1].strip()
-                        try:
-                            data = json.loads(data_str)
-                        except json.JSONDecodeError:
-                            continue
+                    if current_event == "messages":
+                        for msg_item in data:
+                            if isinstance(msg_item, dict) and "type" in msg_item:
+                                msg_type = msg_item.get("type")
 
-                        if current_event == "messages":
-                            for msg_item in data:
-                                if isinstance(msg_item, dict) and "type" in msg_item:
-                                    msg_type = msg_item.get("type")
-
-                                    if msg_type == "AIMessageChunk":
-                                        content = msg_item.get("content", "")
+                                if msg_type == "AIMessageChunk":
+                                    content = msg_item.get("content", "")
+                                    pending_tasks.append(
                                         asyncio.create_task(self._handle_ai_chunk(content))
+                                    )
 
-                                        for tc in msg_item.get("tool_calls", []):
-                                            pending_tool_calls[tc["id"]] = {
-                                                "name": tc["name"],
-                                                "args": tc.get("args", {}),
-                                            }
+                                    for tc in msg_item.get("tool_calls", []):
+                                        pending_tool_calls[tc["id"]] = {
+                                            "name": tc["name"],
+                                            "args": tc.get("args", {}),
+                                        }
 
-                                    elif msg_type == "tool":
-                                        tc_id = msg_item.get("tool_call_id")
-                                        tool_result = msg_item.get("content", "")
-                                        if tc_id in pending_tool_calls:
-                                            tc_info = pending_tool_calls.pop(tc_id)
-                                            asyncio.create_task(self._handle_tool_table(
-                                                tc_info["name"], tc_info["args"], tool_result
-                                            ))
+                                elif msg_type == "tool":
+                                    tc_id = msg_item.get("tool_call_id")
+                                    tool_result = msg_item.get("content", "")
+                                    if tc_id in pending_tool_calls:
+                                        tc_info = pending_tool_calls.pop(tc_id)
+                                        pending_tasks.append(
+                                            asyncio.create_task(
+                                                self._handle_tool_table(
+                                                    tc_info["name"], tc_info["args"], tool_result
+                                                )
+                                            )
+                                        )
 
-                        elif current_event == "values":
-                            if "__interrupt__" in data and len(data["__interrupt__"]) > 0:
-                                interrupt_data = data["__interrupt__"][0].get("value", {})
-                                break
+                    elif current_event == "values":
+                        if "__interrupt__" in data and len(data["__interrupt__"]) > 0:
+                            interrupt_data = data["__interrupt__"][0].get("value", {})
+                            break
+
+        # Wait for all pending tasks to complete
+        if pending_tasks:
+            await asyncio.gather(*pending_tasks)
 
         print()
 
@@ -254,7 +268,7 @@ class LangGraphClient:
             decisions = []
             for action in action_requests:
                 print("\n" + "=" * 40)
-                print(f"触发敏感操作，需要人工确认！")
+                print("触发敏感操作，需要人工确认！")
                 print(f"工具名称: {action.get('name')}")
                 print(f"工具参数: {json.dumps(action.get('args', {}), ensure_ascii=False)}")
                 print(f"中断说明: {action.get('description', '无')}")
@@ -273,13 +287,12 @@ class LangGraphClient:
                         new_args_str = input("请输入新的参数 (JSON): ")
                         try:
                             new_args = json.loads(new_args_str)
-                            decisions.append({
-                                "type": "edit",
-                                "edited_action": {
-                                    "name": action.get('name'),
-                                    "args": new_args
+                            decisions.append(
+                                {
+                                    "type": "edit",
+                                    "edited_action": {"name": action.get("name"), "args": new_args},
                                 }
-                            })
+                            )
                             break
                         except json.JSONDecodeError:
                             print("JSON 格式错误，请重新输入。")
@@ -307,7 +320,7 @@ class LangGraphClient:
 
         mode = input("请选择操作 (1/2/3): ").strip()
 
-        thread_id: Optional[str] = None
+        thread_id: str | None = None
         inject_context = True
 
         if mode == "2":
@@ -344,9 +357,9 @@ class LangGraphClient:
 
         while True:
             user_input = input("提问: ").strip()
-            if user_input.lower() in ('quit', 'exit', 'q'):
+            if user_input.lower() in ("quit", "exit", "q"):
                 break
-            if user_input.lower() == 'new':
+            if user_input.lower() == "new":
                 # 强制新 session：创建 thread，不注入上下文
                 self.memory_router.invalidate_cache()
                 thread_id = await self.create_thread()
@@ -367,7 +380,7 @@ class LangGraphClient:
                 )
                 injected = self.memory_router.build_injected_messages(ctx)
                 if injected:
-                    print(f"[关联历史，注入上下文]")
+                    print("[关联历史，注入上下文]")
                 # 后续消息不再关联
                 inject_context = False
 

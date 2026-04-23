@@ -64,19 +64,20 @@ uv run python -m agent_call.agent
 ├── .env.example                    # 环境变量示例
 ├── main.py                         # 项目入口文件
 ├── client_apis/                    # 客户端 API 服务
-│   └── agent_client.py           # LangGraph HTTP 客户端（交互入口）
-├── agent_call/                    # Agent 核心代码包
+│   ├── __init__.py
+│   ├── agent_client.py           # LangGraph HTTP 客户端（交互入口）
+│   └── memory_router.py          # 跨 Session 记忆路由（客户端专用）
+├── agent_call/                    # Agent 核心代码包（LangGraph 服务端）
 │   ├── __init__.py                # 包初始化文件
 │   ├── agent.py                   # Agent 主逻辑和构建函数
 │   ├── mcp_config.py              # MCP 客户端配置
 │   ├── custom_mcp_server.py       # 自定义 MCP 服务器实现
-│   ├── middleware.py              # Human-in-the-loop 中间件配置
-│   ├── vision_agent.py            # 视觉理解 Sub-Agent（多模态模型）
-│   └── memory_router.py           # 跨 Session 记忆路由
+│   ├── middleware.py               # Human-in-the-loop 中间件配置
+│   └── vision_agent.py            # 视觉理解 Sub-Agent（多模态模型）
 └── readme_hitl.md                 # HITL 客户端接口详细说明
 ```
 ## 启动客户端
-### uv run client_apis/agent_client.py
+### uv run python -m client_apis.agent_client
 ### [客户端接口说明文件](readme_hitl.md) - http接口和python改造、sse 帧格式、前端接入指南
 
 ## 各文件作用详解
@@ -274,7 +275,7 @@ Python 项目配置文件，包含：
 uv run client_apis/agent_client.py
 ```
 
-### [agent_call/memory_router.py](agent_call/memory_router.py) - 跨 Session 记忆路由
+### [client_apis/memory_router.py](client_apis/memory_router.py) - 跨 Session 记忆路由
 
 智能判断当前对话是否需要关联历史上下文，避免重复提供背景信息。
 

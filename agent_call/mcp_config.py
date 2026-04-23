@@ -8,8 +8,8 @@ MCP 客户端配置
 """
 
 import os
-from langchain_mcp_adapters.client import MultiServerMCPClient
 
+from langchain_mcp_adapters.client import MultiServerMCPClient
 
 client = MultiServerMCPClient(
     {
@@ -22,7 +22,7 @@ client = MultiServerMCPClient(
             # Make sure you start your weather server on port 8000
             "url": os.getenv("AMAP_MCP_URL"),
             "transport": "http",
-        }
+        },
     }
 )
 
@@ -31,6 +31,8 @@ async def main():
     tools = await client.get_tools()
     print(tools)
 
+
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())

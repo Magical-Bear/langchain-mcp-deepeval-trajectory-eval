@@ -9,10 +9,11 @@
 """
 
 import os
-from typing import Any
-from fastmcp import FastMCP
-from dotenv import load_dotenv
 from random import choice
+from typing import Any
+
+from dotenv import load_dotenv
+from fastmcp import FastMCP
 
 # 加载环境变量
 load_dotenv()
@@ -50,7 +51,7 @@ async def get_gps() -> dict[str, Any]:
     return {
         "longitude": round(longitude, 6),
         "latitude": round(latitude, 6),
-        "formatted": f"东经{longitude:.6f}°, 北纬{latitude:.6f}°"
+        "formatted": f"东经{longitude:.6f}°, 北纬{latitude:.6f}°",
     }
 
 
@@ -72,16 +73,12 @@ async def get_contact_phone(name: str) -> dict[str, Any]:
     """
     phone = CONTACTS.get(name)
     if phone:
-        return {
-            "name": name,
-            "phone": phone,
-            "found": True
-        }
+        return {"name": name, "phone": phone, "found": True}
     return {
         "name": name,
         "phone": "",
         "found": False,
-        "message": f"未找到联系人 '{name}'，可用联系人：{', '.join(CONTACTS.keys())}"
+        "message": f"未找到联系人 '{name}'，可用联系人：{', '.join(CONTACTS.keys())}",
     }
 
 
@@ -109,8 +106,9 @@ async def make_call(phone: str, name: str = "") -> dict[str, Any]:
         "success": True,
         "phone": phone,
         "name": name,
-        "message": f"正在呼叫 {display_name} ({phone})..."
+        "message": f"正在呼叫 {display_name} ({phone})...",
     }
+
 
 @mcp.tool()
 async def send_sms(phone: str, message: str):
@@ -131,23 +129,24 @@ async def send_sms(phone: str, message: str):
     result = choice([True, False])
     if result:
         return {
-            "success": result,   # 是否成功
-            "message": "发送成功"     # 结果信息
+            "success": result,  # 是否成功
+            "message": "发送成功",  # 结果信息
         }
     else:
         return {
-            "success": result,   # 是否成功
-            "message": "手机欠费了"   # 结果信息
+            "success": result,  # 是否成功
+            "message": "手机欠费了",  # 结果信息
         }
+
 
 if __name__ == "__main__":
     # 从环境变量获取端口，默认 8000
     port = int(os.getenv("CUSTOM_MCP_PORT", "8000"))
     host = "127.0.0.1"
 
-    print(f"🚀 启动自定义 MCP 服务器...")
+    print("🚀 启动自定义 MCP 服务器...")
     print(f"   地址: http://{host}:{port}/mcp")
-    print(f"   模式: streamable-http")
+    print("   模式: streamable-http")
 
     # 启动 MCP 服务器（streamable-http 模式）
     mcp.run(transport="streamable-http", host=host, port=port)
