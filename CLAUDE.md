@@ -71,10 +71,7 @@ uv run python -m agent_call.mcp_config    # Prints available tools from all MCP 
 │  │  │  ChatOpenAI  │  │  MCP Tools   │  │  HITL Middle-  │ │  │
 │  │  │  (Kimi K2.5) │  │  (dynamic)   │  │  ware          │ │  │
 │  │  └──────────────┘  └──────────────┘  └────────────────┘ │  │
-│  │  ┌──────────────────────────────────────────────────┐   │  │
-│  │  │  @dynamic_prompt  ← context.memory 注入上下文     │   │  │
-│  │  └──────────────────────────────────────────────────┘   │  │
-│  │              InMemorySaver (checkpointer)                 │  │
+│  │              InMemorySaver (checkpointer)                  │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └────────────────────────┬───────────────────────────────────────┘
                          │ SSE streaming (LangGraph API)
@@ -148,10 +145,11 @@ The agent uses `InMemorySaver` as its checkpointer, enabling multi-turn memory w
 ### 4. Cross-Session Memory (MemoryRouter)
 `client_apis/agent_client.py` integrates `MemoryRouter` to enable cross-session memory:
 
-1. **Routing**: On each user message, `MemoryRouter.route()` queries `/threads/search` for the most recent threads and uses `kimi-k2-turbo-preview` to classify whether the current message is related to the prior session (binary: y/n).
-2. **Context injection**: If related, the last 3 full turns (user + ai) are extracted and formatted as a `HumanMessage`, then injected as the **first message** in `input.messages` sent to the `/threads/{id}/runs/stream` endpoint.
+1. **Routing**: On the first user message, `MemoryRouter.route()` queries `/threads/search` for the most recent threads and uses `kimi-k2-turbo-preview` to classify whether the current message is related to the prior session (binary: y/n).
+2. **Context injection**: If related, the last 3 full turns (user + ai) are extracted and formatted as a `HumanMessage`, then injected as the **first message** in `input.messages` sent to the `/threads/{id}/runs/stream` endpoint. The client uses its own newly created `thread_id` — no switching to the old thread.
 3. **Compression**: If history exceeds 3 turns, `kimi-k2-0905-preview` compresses it into a summary first.
-4. **Persistence**: LangGraph's `InMemorySaver` checkpoints the full message list (including injected context), so the agent sees the same context on every subsequent call within that thread.
+4. **One-shot**: After the first message, `inject_context` is set to `False` — subsequent messages are sent directly to the current thread without any routing or context injection.
+5. **Persistence**: LangGraph's `InMemorySaver` checkpoints the full message list (including injected context), so the agent sees the same context on every subsequent call within that thread.
 
 Key models (configured in `.env`):
 - `CLASSIFIER_MODEL` — `kimi-k2-turbo-preview`: relevance classification

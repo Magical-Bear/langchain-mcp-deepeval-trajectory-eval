@@ -59,13 +59,18 @@ class MemoryRouter:
     # ---- 对话级别 API ----
 
     async def route(
-        self, query: str, force_thread_id: Optional[str] = None
+        self,
+        query: str,
+        force_thread_id: Optional[str] = None,
+        own_thread_id: Optional[str] = None,
     ) -> ThreadContext:
         """
         路由决策。
+
         - force_thread_id: 直接使用该 thread_id，注入其历史上下文
-        - None: 查询 /threads/search，用分类器找关联 thread
-        返回 ThreadContext 包含 thread_id 和待注入的消息列表
+        - own_thread_id: 客户端已持有自己的 thread，只从关联 thread 取上下文，
+                         返回的 thread_id 仍用 own_thread_id
+        - None + 无关联: 返回新的 ThreadContext（thread_id 由内部创建）
         """
         # 强制复用
         if force_thread_id:
@@ -76,9 +81,15 @@ class MemoryRouter:
         for thread in threads:
             thread_id = thread["thread_id"]
             if await self._is_related(query, thread):
-                return await self._build_context_for_thread(thread_id)
+                ctx = await self._build_context_for_thread(thread_id)
+                # 用客户端自己的 thread_id，不切换到旧 thread
+                if own_thread_id:
+                    ctx.thread_id = own_thread_id
+                return ctx
 
-        # 无关联 → 新 thread
+        # 无关联 → 新 thread（客户端有 own_thread_id 时优先用）
+        if own_thread_id:
+            return ThreadContext(thread_id=own_thread_id)
         new_id = await self._create_thread()
         return ThreadContext(thread_id=new_id)
 
@@ -171,7 +182,8 @@ class MemoryRouter:
 
     async def _is_related(self, query: str, thread: dict) -> bool:
         """调用 kimi-k2-turbo-preview 判断当前消息是否与该 thread 关联"""
-        messages = thread.get("values", {}).get("messages", [])
+        values = thread.get("values") or {}
+        messages = values.get("messages", [])
         turns = self._extract_turns(messages, n=3)
         history_text = self._format_full_turns_for_classifier(turns)
 
@@ -225,7 +237,7 @@ class MemoryRouter:
         if not target:
             return ThreadContext(thread_id=thread_id)
 
-        messages = target.get("values", {}).get("messages", [])
+        messages = (target.get("values") or {}).get("messages", [])
 
         # 提取所有轮次用于压缩判断
         all_turns = self._extract_turns(messages, n=100)
