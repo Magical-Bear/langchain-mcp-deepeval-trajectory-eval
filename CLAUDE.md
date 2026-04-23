@@ -115,7 +115,8 @@ Agent connects to MCP servers via streamable HTTP:
 | File | Role |
 |---|---|
 | `langgraph.json` | LangGraph CLI config — maps `my_mcp_agent` → `agent_call/agent.py:build_graph` |
-| `agent_call/agent.py` | Core agent: loads env, fetches MCP tools, creates `ChatOpenAI` (Kimi), wraps with HITL middleware and `InMemorySaver`, exposes `build_graph()`. Uses a plain string system prompt; context is injected as a `HumanMessage` in the messages list. |
+| `agent_call/agent.py` | Core agent: loads env, fetches MCP tools, creates `ChatOpenAI` (Kimi), wraps with HITL middleware and `InMemorySaver`, exposes `build_graph()`. Registers `analyze_image` as a tool. |
+| `agent_call/vision_agent.py` | Vision sub-agent wrapped as a `@tool`. Uses a vision-capable model (GPT-4o/Claude/Gemini) to analyze images from URL or base64. Loaded lazily and cached at module level. |
 | `agent_call/memory_router.py` | `MemoryRouter` — queries `/threads/search` to get historical messages, uses `kimi-k2-turbo-preview` to classify relevance (y/n), uses `kimi-k2-0905-preview` to compress long history, and formats injected `HumanMessage` for context injection. |
 | `agent_call/mcp_config.py` | Creates a `MultiServerMCPClient` connecting to Phone-use and Amap MCP servers |
 | `agent_call/middleware.py` | Configures `HumanInTheLoopMiddleware` — defines which tools require approval and what decisions are allowed |
@@ -138,6 +139,16 @@ Sensitive tool calls are gated by `HumanInTheLoopMiddleware`. Each tool can be c
 - `{"allowed_decisions": ["approve", "reject"]}` — user can only approve or reject (no edit)
 
 Currently gated tools: `get_gps`, `get_contact_phone`, `send_sms`, `make_call`.
+
+### 2b. Vision Sub-Agent (Tool-as-Agent Pattern)
+A vision-capable sub-agent is wrapped as a `@tool` and registered alongside MCP tools. The pattern follows LangChain 1.0 conventions:
+
+1. A dedicated sub-agent is created via `create_agent()` with a vision-capable model (GPT-4o/Claude/Gemini).
+2. The sub-agent is cached at module level via `get_vision_subagent()` to avoid re-initialization overhead.
+3. The `@tool("vision")` decorator wraps `analyze_image()`, which builds a multimodal message (text + image_url) and invokes the sub-agent.
+4. The resulting tool is appended to the main agent's tool list in `build_graph()`.
+
+Supported inputs: image URL or base64-encoded image data, with a natural-language query describing what to look for.
 
 ### 3. LangGraph Checkpointing
 The agent uses `InMemorySaver` as its checkpointer, enabling multi-turn memory within a session via `thread_id`. For production use, replace with `PostgresSaver`.
@@ -177,6 +188,13 @@ COMPRESSOR_MODEL=          # kimi-k2-0905-preview (context compression)
 
 AMAP_MCP_KEY=              # Amap Maps MCP key (mcp.amap.com)
 AMAP_MCP_URL=              # https://mcp.amap.com/mcp?key=${AMAP_MCP_KEY}
+
+VISION_MODEL_PROVIDER=     # openai / google_genai / anthropic
+VISION_MODEL=              # gpt-4o-mini (or gemini-1.5-flash / claude-3-sonnet)
+OPENAI_API_KEY=           # Required if VISION_MODEL_PROVIDER=openai
+OPENAI_BASE_URL=          # Optional, defaults to OpenAI API
+GOOGLE_API_KEY=           # Required if VISION_MODEL_PROVIDER=google_genai
+ANTHROPIC_API_KEY=        # Required if VISION_MODEL_PROVIDER=anthropic
 
 CUSTOM_MCP_URL=            # http://localhost:8000/mcp
 CUSTOM_MCP_PORT=           # 8000 (default)

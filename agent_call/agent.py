@@ -20,6 +20,7 @@ from langchain.agents import create_agent
 from langgraph.checkpoint.memory import InMemorySaver
 from agent_call.mcp_config import client
 from agent_call.middleware import create_hitl_middleware
+from agent_call.vision_agent import analyze_image
 
 
 SYSTEM_PROMPT = (
@@ -35,6 +36,7 @@ async def build_graph():
     返回编译后的 agent graph。
     """
     tools = await client.get_tools()
+    tools.append(analyze_image)
 
     model = ChatOpenAI(
         model=os.getenv("MOONSHOT_MODEL", "kimi-k2-5"),
@@ -66,5 +68,31 @@ async def main(query: str):
     print(result)
 
 
+async def demo_vision():
+    """
+    直接对本地图片调用 vision 子 agent，测试图片理解功能。
+    图片路径: demo/images/1.jpg
+    """
+    from langchain_core.messages import HumanMessage
+
+    # 读取本地图片并转为 base64
+    import base64
+    image_path = os.path.join(os.path.dirname(__file__), "..", "demo", "images", "1.jpg")
+    with open(image_path, "rb") as f:
+        image_base64 = base64.b64encode(f.read()).decode("utf-8")
+
+    # 调用 vision 工具
+    result = analyze_image.invoke({
+        "image_base64": image_base64,
+        "query": "请详细描述这张图片的内容，包括场景、物体、文字等所有细节",
+    })
+    print("=== Vision 分析结果 ===")
+    print(result)
+
+
 if __name__ == "__main__":
-    asyncio.run(main("你是什么牛马"))
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "--vision":
+        asyncio.run(demo_vision())
+    else:
+        asyncio.run(main("你是什么牛马"))
